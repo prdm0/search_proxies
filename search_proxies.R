@@ -4,7 +4,7 @@ library(pbmcapply)
 library(fs)
 
 search_proxies <- function(
-    url_test = "https://www.zapimoveis.com.br/venda/imoveis/pb+joao-pessoa",
+    url_test = "",
     save_path = "../API/",
     time_out = 6){
 
@@ -117,42 +117,4 @@ search_proxies <- function(
     file = fs::path(save_path, "proxies", ext = "RData")
   )
   proxies
-}    
-
-# Função útil para testar se a tibble de proxies precisa ser
-# ataulizada.
-last_test <- function(df_proxies,
-          url_string = "https://www.zapimoveis.com.br/venda/imoveis/pb+joao-pessoa"){
-  step <- function(ip, port){
-    conexao <- httr::GET(
-      url_string,
-      httr::use_proxy(
-        url = ip,
-        port = port
-      )
-    )
-    
-    if(conexao$status_code == 200)
-      return(TRUE)
-    else
-      return(FALSE)
-  }
-  
-  try_step <- function(...) 
-    tryCatch(
-      expr = step(...),
-      error = function(e) FALSE
-    )
-  
-  pbmcapply::pbmcmapply(
-    df_proxies$ip,
-    df_proxies$port,
-    FUN = try_step,
-    mc.cores = parallel::detectCores()
-  )
-}
-
-df_proxies <- search_proxies()
-
-result_test <- last_test(df_proxies = df_proxies)
-  
+}  
