@@ -1,120 +1,56 @@
-library(jsonlite)
-library(vroom)
-library(pbmcapply)
-library(fs)
+library(stringr)
+library(glue)
+library(dplyr)
 
-search_proxies <- function(
-    url_test = "",
-    save_path = "../API/",
-    time_out = 6){
+encontrando_proxies <- function(
+    n = 1L, 
+    nivel = "alto",
+    tipo = "https",
+    paises = NULL){
+  
+  nivel <- tolower(nivel)
+  
+  nivel <- dplyr::case_when(
+    nivel == "alto"         ~ "High",
+    nivel == "anonimo"      ~ "Anonymous",
+    nivel == "transparente" ~ "Transparent"
+  )
 
-  read_list_proxies_txt <- function(string_url){
-    df <- vroom::vroom(
-      string_url,
-      progress = FALSE,
-      show_col_types = FALSE,
-      col_names = FALSE
-    )  
-    colnames(df) <- c("ip", "port")
-    df
-  }
+  if(is.null(paises)) 
+    lista_paises <- ""
+  else 
+    lista_paises <- glue("--countries {paste(paises, collapse = ' ')}")
   
-  df_proxies_1 <- 
-    read_list_proxies_txt(
-      "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt"
-    )
+  command <- 
+    "docker run bluet/proxybroker2 find --types {tipo}\\
+     --lvl {nivel} {lista_paises} --strict -l {n}
+    " |> glue()
+
+  proxy <-
+    system(
+      command = command,
+      intern = TRUE,
+      ignore.stderr = TRUE
+    ) |> 
+      as.character() |> 
+      stringr::str_extract("\\d+.\\d+.\\d+.\\d+:\\d+")
   
-  df_proxies_2 <- 
-    read_list_proxies_txt(
-      "https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt"
-    )
+  ip <- proxy |> stringr::str_extract("\\d+.\\d+.\\d+.\\d+")
+  porta <- proxy |>
+    stringr::str_remove(glue("{ip}:"))
   
-  df_proxies_3 <- 
-    read_list_proxies_txt(
-      "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt"
-    )
-  
-  df_proxies_4 <-
-    read_list_proxies_txt(
-      "https://raw.githubusercontent.com/sunny9577/proxy-scraper/master/proxies.txt"
-    )
-  
-  df_proxies_5 <- 
-    read_list_proxies_txt( 
-        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt"
-      )
-  
-  df_proxies_6 <- 
-    read_list_proxies_txt( 
-      "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt"
-    )
-  
-  df_proxies_7 <- 
-    read_list_proxies_txt( 
-      "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
-    )
-  
-  df_proxies_8 <-
-    read_list_proxies_txt(
-      "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/https.txt"
-    )
-  
-  test <- function(ip, port){
-    
-    conexao <- 
-      httr::GET(
-        url_test,
-        httr::timeout(time_out),
-        httr::use_proxy(
-          url = ip,
-          port = port
-        )
-      )
-    
-    if(conexao$status_code == 200)
-      return(TRUE)
-    else
-      return(FALSE)
-  }
-  
-  try_test <- function(...) 
-    tryCatch(
-      expr = test(...),
-      error = function(e) FALSE
-    )
-  
-  search <- function(df){
-    pbmcapply::pbmcmapply(
-      df$ip,
-      df$port,
-      FUN = try_test,
-      mc.cores = parallel::detectCores()
-    )
-  }
-  
-  list_proxies_1 <- search(df_proxies_1)
-  list_proxies_2 <- search(df_proxies_2)
-  list_proxies_3 <- search(df_proxies_3)
-  list_proxies_4 <- search(df_proxies_4)
-  list_proxies_5 <- search(df_proxies_5)
-  list_proxies_6 <- search(df_proxies_6)
-  list_proxies_7 <- search(df_proxies_7)
-  list_proxies_8 <- search(df_proxies_8)
-  
-  proxies <- dplyr::bind_rows(
-    df_proxies_1[unlist(list_proxies_1) == TRUE, ],
-    df_proxies_2[unlist(list_proxies_2) == TRUE, ],
-    df_proxies_3[unlist(list_proxies_3) == TRUE, ],
-    df_proxies_4[unlist(list_proxies_4) == TRUE, ],
-    df_proxies_5[unlist(list_proxies_5) == TRUE, ],
-    df_proxies_6[unlist(list_proxies_6) == TRUE, ],
-    df_proxies_7[unlist(list_proxies_7) == TRUE, ],
-    df_proxies_8[unlist(list_proxies_8) == TRUE, ]
+  list(ip = ip, porta = as.integer(porta))
+}
+
+proxy <- encontrando_proxys()
+
+# Testando o acesso ao site da linguagem
+httr::GET(
+  "https://www.r-project.org",
+  httr::use_proxy(
+    url = proxy$ip,
+    port = proxy$porta
   )
-  
-  save(
-    proxies,
-    file = fs::path(save_path, "proxies", ext = "RData")
-  )
-  proxies
-}  
+)
+
+
