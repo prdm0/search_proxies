@@ -49,11 +49,9 @@ quero_conexao <- function(url, requisicao = GET, tipo = "https", ...){
   conexao
 }
 
-# Exemplo: encontrando proxy para acessar o site
-# do IMDb
-
 quero_conexao(
-   url = "https://www.imdb.com",
-   tipo = "https",
-   requisicao = GET
-) 
+  url = "https://www.imdb.com",
+  tipo = "https",
+  requisicao = GET
+)
+
