@@ -32,7 +32,7 @@ quero_conexao <- function(url, requisicao = GET, tipo = "https", ...){
     c(ip, porta, ...) %<-% obter_proxy()
     
     conexao <- 
-      httr::GET(
+      try_request(
         url = url,
         use_proxy(
            url = ip,
