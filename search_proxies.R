@@ -1,56 +1,59 @@
+library(rlang)
 library(stringr)
+library(rlang)
+library(httr)
 library(glue)
-library(dplyr)
+library(zeallot)
 
-encontrando_proxies <- function(
-    n = 1L, 
-    nivel = "alto",
-    tipo = "https",
-    paises = NULL){
-  
-  nivel <- tolower(nivel)
-  
-  nivel <- dplyr::case_when(
-    nivel == "alto"         ~ "High",
-    nivel == "anonimo"      ~ "Anonymous",
-    nivel == "transparente" ~ "Transparent"
-  )
+quero_conexao <- function(url, requisicao = GET, tipo = "https", ...){
 
-  if(is.null(paises)) 
-    lista_paises <- ""
-  else 
-    lista_paises <- glue("--countries {paste(paises, collapse = ' ')}")
+  request <- function(...)
+    rlang::call2(.fn = requisicao, ...) |> 
+      eval()
   
-  command <- 
-    "docker run bluet/proxybroker2 find --types {tipo}\\
-     --lvl {nivel} {lista_paises} --strict -l {n}
-    " |> glue()
-
-  proxy <-
-    system(
-      command = command,
-      intern = TRUE,
-      ignore.stderr = TRUE
-    ) |> 
-      as.character() |> 
-      stringr::str_extract("\\d+.\\d+.\\d+.\\d+:\\d+")
+  try_request <- function(...)
+    tryCatch(
+      expr = request(...),
+      error = function(e) NA
+    )
   
-  ip <- proxy |> stringr::str_extract("\\d+.\\d+.\\d+.\\d+")
-  porta <- proxy |>
-    stringr::str_remove(glue("{ip}:"))
+  tipo_proxy <- 
+    dplyr::case_when(
+      tipo == "http"  ~ "3",
+      tipo == "https" ~ "4"
+    )
   
-  list(ip = ip, porta = as.integer(porta))
+  obter_proxy <- function()
+    glue("https://public.freeproxyapi.com/api/Proxy/ProxyByType/0/{tipo_proxy}") |> 
+      jsonlite::fromJSON()
+  
+  # Foçando a busca de proxies que estabeleça a conexão
+  repeat{
+    c(ip, porta, ...) %<-% obter_proxy()
+    
+    conexao <- 
+      httr::GET(
+        url = url,
+        use_proxy(
+           url = ip,
+           port = porta
+        ),
+        ...
+      )
+    
+    if(class(conexao) == "response" && conexao$status_code == 200)
+      break
+  }
+  
+  # Devolvendo a conexao
+  conexao
 }
 
-proxy <- encontrando_proxys()
+# Exemplo: encontrando proxy para acessar o site
+# do IMDb
 
-# Testando o acesso ao site da linguagem
-httr::GET(
-  "https://www.r-project.org",
-  httr::use_proxy(
-    url = proxy$ip,
-    port = proxy$porta
-  )
-)
-
-
+quero_conexao(
+   url = "https://www.imdb.com",
+   tipo = "https",
+   requisicao = GET
+) 
